@@ -67,8 +67,7 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
 
     return codon_fitness_scores
 
-
-def calculate_aa_fitness(codon_fitness_scores, tp_values, wt_counts, total_read_counts, translate_dict):
+def calculate_aa_fitness(codon_fitness_scores, tp_values, wt_counts, total_read_counts, translate_dict, aa_index):
     '''Calculates the fitness of amino acids as the mean fitness of synonymous codons. Returns a dictionary
     with positions as keys, then amino acids (or stop), then the fitness value.'''
     aa_fitness_scores = {}
@@ -96,6 +95,7 @@ if __name__ == '__main__':
     parser.add_argument('--translate_dict', type=str, help='pickle file encoding a dictionary for translating from codon to amino acid')
     parser.add_argument('--wt_codon_dict', type=str, help='pickle file encoding a dictionary with the wild-type codon for each position')
     parser.add_argument('--wt_time_constants', type=float, nargs=2, metavar=("unperturbed_wt_time_constant, perturbed_wt_time_constant"), help='time constants for wildtype under both conditions')
+    parser.add_argument('--aa_index', type=str, help='pickle file encoding a dictionary of amino acids and corresponding indeces used for arranging while plotting')
     args = parser.parse_args()
 
     
@@ -114,8 +114,8 @@ if __name__ == '__main__':
         unpert_codon_rel_fitness = pickle.load(open(args.codon_fitness[0], 'rb')) #position->codon->(slope, std_error)
         pert_codon_rel_fitness = pickle.load(open(args.codon_fitness[1], 'rb')) #position->codon->(slope, std_error)
 
-    unpert_aa_rel_fitness = aa_fitness_from_barcodes(unpert_codon_rel_fitness, wt_codon_dict, translate_dict)
-    pert_aa_rel_fitness = aa_fitness_from_barcodes(pert_codon_rel_fitness, wt_codon_dict, translate_dict)
+    unpert_aa_rel_fitness = aa_fitness_from_barcodes(unpert_codon_rel_fitness, wt_codon_dict, translate_dict, aa_index)
+    pert_aa_rel_fitness = aa_fitness_from_barcodes(pert_codon_rel_fitness, wt_codon_dict, translate_dict, aa_index)
 
 
     
