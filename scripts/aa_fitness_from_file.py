@@ -8,6 +8,8 @@ import numpy as np
 import argparse
 import pprint
 
+NAN_REPLACEMENT = -100 #number to replace np.nan with for downstream analysis, should be absurdly large/small
+
 '''
 To-do:
     -check on how NaN will be provided
@@ -137,12 +139,6 @@ def calculate_aa_fitness(codon_fitness, wt_codon_dict, translate_dict, aa_index)
             aa_fitnesses[pos-1,i] = float(aa_fitness)
     return aa_fitnesses
 
-def wald_test(array, alpha=0.05, temp_file='temp_out.csv'):
-    #write out file
-    pass
-    
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Given either a dictionary of fitness values for barcodes or codons with and without a perturbation, calculates interactions.")
     parser.add_argument('--barcode_fitness', type=str, default=None, nargs=2, metavar=("unperturbed_barcode_fitness", "perturbed_barcode_fitness"), help='pickle file encoding a dictionary of barcodes with counts')
@@ -152,6 +148,10 @@ if __name__ == '__main__':
     parser.add_argument('--wt_codon_dict', type=str, help='pickle file encoding a dictionary with the wild-type codon for each position')
     parser.add_argument('--wt_time_constants', type=float, nargs=2, metavar=("unperturbed_wt_time_constant, perturbed_wt_time_constant"), help='time constants for wildtype under both conditions')
     parser.add_argument('--aa_index', type=str, help='pickle file encoding a dictionary of amino acids and corresponding indeces used for arranging while plotting')
+    parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
+    parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
+    parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
+
     args = parser.parse_args()
 
     allele_dict = pickle.load(open(args.allele_dict, 'rb')) 
@@ -173,6 +173,14 @@ if __name__ == '__main__':
     unpert_aa_rel_fitness  = calculate_aa_fitness(unpert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
     pert_aa_rel_fitness = calculate_aa_fitness(pert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
 
+    if args.rel_fitness_pickle is not None:
+        out_array = pert_aa_rel_fitness
+        out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
+        pickle.dump(out_array, open(args.rel_fitness_pickle, 'w'))
+
+    if args.rel_fitness_csv is not None:
+        np.savetxt(args.rel_fitness_csv, pert_aa_rel_fitness, delimiter=",")
+
     unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
     pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
     pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
@@ -182,6 +190,9 @@ if __name__ == '__main__':
     #interaction_product_term, interaction_product_variance = array_prod(pert_aa_norm_fitness, unpert_aa_norm_fitness, pert_aa_norm_variance, unpert_aa_norm_variance)
     #interactions, interaction_variance = array_diff(pert_aa_norm_fitness, interaction_product_term, pert_aa_norm_variance, interaction_product_variance)
     interactions = pert_aa_norm_fitness - pert_aa_norm_fitness*unpert_aa_norm_fitness
-    interactions[np.where(np.isnan(interactions))]=-100
+    if args.interaction_pickle is not None:
+        out_array = interactions
+        out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
+        pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
 
