@@ -6,6 +6,7 @@ import cPickle as pickle
 #import scipy
 import numpy as np
 import argparse
+import pprint
 
 '''
 To-do:
@@ -30,11 +31,14 @@ def array_mean(l, variances=None):
 def array_weighted_mean(l, variances):
     '''Calculates the inverse variance weighted average of list and returns average with variance'''
     vals = np.array(l)
+    real_vals_indices = np.where(~np.isnan(vals))
+    real_vals = vals[real_vals_indices]
     variances = np.array(variances)
+    real_variances = variances[real_vals_indices]
     n = len(l)
-    if n > 0 and n == len(variances):
-        new_var = float(1/np.sum(1/variances**2))
-        mean = float(new_var * np.sum(vals/variances**2))
+    if n > 0 and n == len(real_variances):
+        new_var = float(1/np.sum(1/real_variances**2))
+        mean = float(new_var * np.sum(real_vals/real_variances**2))
         return mean, new_var
     return None
 
@@ -100,8 +104,7 @@ def syn_codons(codon, translate_dict):
 
 def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict):
     '''Calculates fitness scores for all codons by averaging over fitness values for barcodes and
-    returns as a dictionary of positions, then codons, where the corresponding value is a tuple with fitness
-    score and variance.'''
+    returns as a dictionary of positions, then codons, where the corresponding value is a fitness score'''
     codon_fitnesses = {}
 
     for pos in wt_codon_dict.keys():
@@ -113,29 +116,26 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
                 barcode_fitnesses = np.array([x for x,y in barcode_tuple])
                 barcode_variances = np.array([y for x,y in barcode_tuple])
                 codon_fitness, codon_variance = array_weighted_mean(barcode_fitnesses, barcode_variances)
-                codon_fitnesses[pos][codon] = (float(codon_fitness), float(codon_variance))
+                codon_fitnesses[pos][codon] = float(codon_fitness)
             else:
-                codon_fitnesses[pos][codon] = (np.nan, np.nan)
+                codon_fitnesses[pos][codon] = np.nan
     return codon_fitnesses
 
 def calculate_aa_fitness(codon_fitness, wt_codon_dict, translate_dict, aa_index):
     '''Calculates the fitness of amino acids as the mean fitness of synonymous codons. Returns a numpy array
-    of fitness values and an array of variances.'''
-    aa_fitnesses = np.empty(shape=(len(wt_codon_dict),len(translate_dict)))
-    aa_variances = np.empty(shape=(len(wt_codon_dict),len(translate_dict)))
+    of fitness values.'''
+    aa_fitnesses = np.empty(shape=(len(wt_codon_dict.keys()),len(aa_index.keys())))
 
     for pos in wt_codon_dict.keys():
         for aa,i in sorted(aa_index.items(), key=lambda x: x[1]):
             syn_codons = aa_to_codons(aa, translate_dict)
-            syn_codon_fitness = np.array([codon_fitness[pos][codon][0] for codon in syn_codons if codon in codon_fitness[pos]])
-            syn_codon_variance = np.array([codon_fitness[pos][codon][1] for codon in syn_codons if codon in codon_fitness[pos]])
+            syn_codon_fitness = np.array([codon_fitness[pos][codon] for codon in syn_codons if codon in codon_fitness[pos]])
             if len(syn_codon_fitness) > 0:
-                aa_fitness, aa_variance = array_mean(syn_codon_fitness, syn_codon_variance)
+                aa_fitness = np.nanmean(syn_codon_fitness)
             else:
-                aa_fitness, aa_variance = np.nan, np.nan
+                aa_fitness = np.nan
             aa_fitnesses[pos-1,i] = float(aa_fitness)
-            aa_variances[pos-1,i] = float(aa_variance)
-    return aa_fitnesses, aa_variances
+    return aa_fitnesses
 
 def wald_test(array, alpha=0.05, temp_file='temp_out.csv'):
     #write out file
@@ -170,14 +170,18 @@ if __name__ == '__main__':
         unpert_codon_rel_fitness = pickle.load(open(args.codon_fitness[0], 'rb')) #position->codon->(slope, std_error)
         pert_codon_rel_fitness = pickle.load(open(args.codon_fitness[1], 'rb')) #position->codon->(slope, std_error)
 
-    unpert_aa_rel_fitness,unpert_aa_rel_variance  = calculate_aa_fitness(unpert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
-    pert_aa_rel_fitness,pert_aa_rel_variance = calculate_aa_fitness(pert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
+    unpert_aa_rel_fitness  = calculate_aa_fitness(unpert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
+    pert_aa_rel_fitness = calculate_aa_fitness(pert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
 
     unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
-    unpert_aa_norm_variance = unpert_aa_rel_variance
-    pert_aa_abs_fitness, pert_aa_abs_variance = array_scalar_prod(pert_aa_rel_fitness+1, pert_dw, pert_aa_rel_variance)
-    pert_aa_norm_fitness, pert_aa_norm_variance = array_scalar_prod(pert_aa_abs_fitness, 1/unpert_dw, pert_aa_abs_variance)
+    pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
+    pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
+    #pert_aa_abs_fitness, pert_aa_abs_variance = array_scalar_prod(pert_aa_rel_fitness+1, pert_dw, pert_aa_rel_variance)
+    #pert_aa_norm_fitness, pert_aa_norm_variance = array_scalar_prod(pert_aa_abs_fitness, 1/unpert_dw, pert_aa_abs_variance)
 
-    interaction_product_term, interaction_product_variance = array_prod(pert_aa_norm_fitness, unpert_aa_norm_fitness, pert_aa_norm_variance, unpert_aa_norm_variance)
-    interactions, interaction_variance = array_diff(pert_aa_norm_fitness, interaction_product_term, pert_aa_norm_variance, interaction_product_variance)
+    #interaction_product_term, interaction_product_variance = array_prod(pert_aa_norm_fitness, unpert_aa_norm_fitness, pert_aa_norm_variance, unpert_aa_norm_variance)
+    #interactions, interaction_variance = array_diff(pert_aa_norm_fitness, interaction_product_term, pert_aa_norm_variance, interaction_product_variance)
+    interactions = pert_aa_norm_fitness - pert_aa_norm_fitness*unpert_aa_norm_fitness
+    interactions[np.where(np.isnan(interactions))]=-100
+
 
