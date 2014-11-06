@@ -7,6 +7,8 @@ import cPickle as pickle
 import numpy as np
 import argparse
 import pprint
+#import matplotlib.pyplot as plt
+#import matplotlib.image as mpimg
 
 NAN_REPLACEMENT = -100 #number to replace np.nan with for downstream analysis, should be absurdly large/small
 
@@ -118,6 +120,7 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
                 barcode_fitnesses = np.array([x for x,y in barcode_tuple])
                 barcode_variances = np.array([y for x,y in barcode_tuple])
                 codon_fitness, codon_variance = array_weighted_mean(barcode_fitnesses, barcode_variances)
+                #codon_fitness = np.nanmean(barcode_fitnesses)
                 codon_fitnesses[pos][codon] = float(codon_fitness)
             else:
                 codon_fitnesses[pos][codon] = np.nan
@@ -126,7 +129,7 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
 def calculate_aa_fitness(codon_fitness, wt_codon_dict, translate_dict, aa_index):
     '''Calculates the fitness of amino acids as the mean fitness of synonymous codons. Returns a numpy array
     of fitness values.'''
-    aa_fitnesses = np.empty(shape=(len(wt_codon_dict.keys()),len(aa_index.keys())))
+    aa_fitnesses = np.empty(shape=(len(aa_index.keys()),len(wt_codon_dict.keys())))
 
     for pos in wt_codon_dict.keys():
         for aa,i in sorted(aa_index.items(), key=lambda x: x[1]):
@@ -136,8 +139,16 @@ def calculate_aa_fitness(codon_fitness, wt_codon_dict, translate_dict, aa_index)
                 aa_fitness = np.nanmean(syn_codon_fitness)
             else:
                 aa_fitness = np.nan
-            aa_fitnesses[pos-1,i] = float(aa_fitness)
+            aa_fitnesses[i,pos-1] = float(aa_fitness)
     return aa_fitnesses
+
+def variance_from_fitness(fitness):
+    '''Implements some fitness-variance distribution that allows estimation of variance from fitness value.
+    Needs input.'''
+    return None
+
+array_variance_from_fitness = np.vectorize(variance_from_fitness, otypes=[np.float]) #efficient calculation of variance from every fitness value in an array using numpy
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Given either a dictionary of fitness values for barcodes or codons with and without a perturbation, calculates interactions.")
@@ -150,8 +161,8 @@ if __name__ == '__main__':
     parser.add_argument('--aa_index', type=str, help='pickle file encoding a dictionary of amino acids and corresponding indeces used for arranging while plotting')
     parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
     parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
+    parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
     parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
-
     args = parser.parse_args()
 
     allele_dict = pickle.load(open(args.allele_dict, 'rb')) 
@@ -181,6 +192,10 @@ if __name__ == '__main__':
     if args.rel_fitness_csv is not None:
         np.savetxt(args.rel_fitness_csv, pert_aa_rel_fitness, delimiter=",")
 
+    if args.rel_fitness_variance_csv is not None:
+        pert_aa_rel_fitness_variance = array_variance_from_fitness(pert_aa_rel_fitness)
+        np.savetxt(args.rel_fitness_variance_csv, pert_aa_rel_fitness_variance, delimiter=",")
+
     unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
     pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
     pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
@@ -195,4 +210,37 @@ if __name__ == '__main__':
         out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
         pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
+    '''
 
+    pert_range = (np.nanmin(pert_aa_rel_fitness),np.nanmax(pert_aa_rel_fitness))
+
+    row_labels = [x for x,y in sorted(aa_index.items(), key=lambda x: x[1])]
+    column_labels = sorted(wt_codon_dict.keys())
+    plt.figure(figsize=(20,6), dpi=72)
+    ax1 = plt.subplot(111)
+    plt.title("Interactions", y=1.05)
+    #vmax = np.nanmax(aa_fitness_matrix)
+    #vmin = np.nanmin(aa_fitness_matrix)
+    #new_cmap = shiftedColorMap(plt.cm.seismic, start=0, midpoint=1 - vmax/(vmax + abs(vmin)), stop=1)
+    plt.title("Fitness", y=1.05)
+    #vmax = np.nanmax(aa_fitness_matrix)
+    #vmin = np.nanmin(aa_fitness_matrix)
+    #new_cmap = shiftedColorMap(plt.cm.seismic, start=0, midpoint=1 - vmax/(vmax + abs(vmin)), stop=1)
+    heatmap = plt.imshow(pert_aa_rel_fitness, cmap=plt.cm.YlGnBu_r, vmax=0, vmin=pert_range[0], interpolation="nearest")
+    #heatmap = plt.imshow(aa_fitness_matrix, cmap=new_cmap, interpolation="nearest")
+    #heatmap = plt.imshow(aa_fitness_matrix, cmap=plt.cm.seismic,vmax=0.3,vmin=-0.3, interpolation="nearest")
+    ax1.set_xticks(np.arange(column_labels[0], column_labels[-1], 5))
+    ax1.set_yticks(np.arange(interactions.shape[0]), minor=False)
+    plt.gca().set_xlim((-0.5, len(column_labels) - 0.5))
+    plt.gca().set_ylim((-0.5, len(row_labels) - 0.5))
+    ax1.invert_yaxis()
+    ax1.set_xticklabels(np.arange(column_labels[0] + 1, column_labels[-1] + 1, 5))
+    ax1.set_yticklabels(row_labels)
+
+    plt.xlabel("Sequence Position", labelpad=10)
+    plt.ylabel("Amino Acid", labelpad=10)
+    plt.colorbar(orientation='vertical', shrink=.68, pad=0.01)
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
+    '''
