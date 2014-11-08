@@ -12,25 +12,6 @@ import pprint
 
 NAN_REPLACEMENT = -100 #number to replace np.nan with for downstream analysis, should be absurdly large/small
 
-'''
-To-do:
-    -check on how NaN will be provided
-    -allow input and propagation of variance of dw
-'''
-
-def array_mean(l, variances=None):
-    '''Calculates simple average of list. If variances for each value are provided, also returns combined variance'''
-    mean = 0
-    var = 0
-    n = len(l)
-    if n > 0:
-        mean = float(sum(l)/n)
-        if variances is not None and len(variances) == n:
-            var = sum(variances)/n**2
-            return mean, var
-        else:
-            return mean
-    return None
 
 def array_weighted_mean(l, variances):
     '''Calculates the inverse variance weighted average of list and returns average with variance'''
@@ -44,6 +25,22 @@ def array_weighted_mean(l, variances):
         new_var = float(1/np.sum(1/real_variances**2))
         mean = float(new_var * np.sum(real_vals/real_variances**2))
         return mean, new_var
+    return None
+
+#These functions were written to perform array operations while propagating variance.
+'''
+def array_mean(l, variances=None):
+    """Calculates simple average of list. If variances for each value are provided, also returns combined variance"""
+    mean = 0
+    var = 0
+    n = len(l)
+    if n > 0:
+        mean = float(sum(l)/n)
+        if variances is not None and len(variances) == n:
+            var = sum(variances)/n**2
+            return mean, var
+        else:
+            return mean
     return None
 
 def array_sum(mA, mB, vA=None, vB=None):
@@ -85,6 +82,7 @@ def array_ratio(mA, mB, vA=None, vB=None):
         return mA/mB
     else:
         return mA/mB,(mB**2)*vA + (mA**2)*vB
+'''
 
 def rna_to_dna(x):
     '''Converts any RNA sequence to a DNA sequence'''
@@ -147,71 +145,88 @@ def variance_from_fitness(fitness):
     Needs input.'''
     return None
 
-array_variance_from_fitness = np.vectorize(variance_from_fitness, otypes=[np.float]) #efficient calculation of variance from every fitness value in an array using numpy
+#enables us to pass an array to the function and get an array out.
+array_variance_from_fitness = np.vectorize(variance_from_fitness, otypes=[np.float])
 
-
+#run
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Given either a dictionary of fitness values for barcodes or codons with and without a perturbation, calculates interactions.")
-    parser.add_argument('--barcode_fitness', type=str, default=None, nargs=2, metavar=("unperturbed_barcode_fitness", "perturbed_barcode_fitness"), help='pickle file encoding a dictionary of barcodes with counts')
-    parser.add_argument('--codon_fitness', type=str, default=None, nargs=2, metavar=("unperturbed_codon_fitness", "perturbed_codon_fitness"), help='pickle file encoding a dictionary of codons with counts')
+    #necessary input_files
+    parser.add_argument('barcode_fitness', type=str, default=None, nargs=2, metavar=("unperturbed_barcode_fitness", "perturbed_barcode_fitness"), help='pickle file encoding a dictionary of barcodes with counts')
+    parser.add_argument('--wt_time_constants', type=float, nargs=2, default=None, metavar=("unperturbed_wt_time_constant, perturbed_wt_time_constant"), help='time constants for wildtype under both conditions')
+    #necessary reference pickles
     parser.add_argument('--allele_dict', type=str, help='pickle file encoding a dictionary of alleles')
     parser.add_argument('--translate_dict', type=str, help='pickle file encoding a dictionary for translating from codon to amino acid')
     parser.add_argument('--wt_codon_dict', type=str, help='pickle file encoding a dictionary with the wild-type codon for each position')
-    parser.add_argument('--wt_time_constants', type=float, nargs=2, metavar=("unperturbed_wt_time_constant, perturbed_wt_time_constant"), help='time constants for wildtype under both conditions')
     parser.add_argument('--aa_index', type=str, help='pickle file encoding a dictionary of amino acids and corresponding indeces used for arranging while plotting')
+    #output options
     parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
     parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
     parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
     parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
     args = parser.parse_args()
 
+    #read in necessary reference pickles
     allele_dict = pickle.load(open(args.allele_dict, 'rb')) 
     translate_dict = pickle.load(open(args.translate_dict, 'rb'))
-    dna_translate_dict = {rna_to_dna(x):y for x,y in translate_dict.items()}
+    dna_translate_dict = {rna_to_dna(x):y for x,y in translate_dict.items()} #uracil's for suckers
     wt_codon_dict = pickle.load(open(args.wt_codon_dict, 'rb'))
     aa_index = pickle.load(open(args.aa_index, 'rb'))
+
+    #time constants (reciprocal of doubling times)
     unpert_dw, pert_dw = args.wt_time_constants
+    
+    #get barcode fitness
+    unpert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[0], 'rb')) #key is barcode. value is tuple with slope and standard error
+    pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
+    
+    #bin to codon fitness
+    unpert_codon_rel_fitness = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict)
+    pert_codon_rel_fitness = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict)
 
-    if args.barcode_fitness is not None:
-        unpert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[0], 'rb')) #key is barcode. value is tuple with slope and standard error
-        pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
-        unpert_codon_rel_fitness = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict)
-        pert_codon_rel_fitness = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict)
-    else:
-        unpert_codon_rel_fitness = pickle.load(open(args.codon_fitness[0], 'rb')) #position->codon->(slope, std_error)
-        pert_codon_rel_fitness = pickle.load(open(args.codon_fitness[1], 'rb')) #position->codon->(slope, std_error)
-
+    #average codon fitness to aa fitness
     unpert_aa_rel_fitness  = calculate_aa_fitness(unpert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
     pert_aa_rel_fitness = calculate_aa_fitness(pert_codon_rel_fitness, wt_codon_dict, dna_translate_dict, aa_index)
 
+    #read out relative amino acid fitness matrix as a pickle (for visualization group)
     if args.rel_fitness_pickle is not None:
         out_array = pert_aa_rel_fitness
         out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
         pickle.dump(out_array, open(args.rel_fitness_pickle, 'w'))
 
+    #read out relative amino acid fitness matrix as a CSV file (for difference matrix calculation)
     if args.rel_fitness_csv is not None:
         np.savetxt(args.rel_fitness_csv, pert_aa_rel_fitness, delimiter=",")
 
+    #read out relative amino acid fitness variance matrix as a CSV file (for hypothesis testing)
     if args.rel_fitness_variance_csv is not None:
         pert_aa_rel_fitness_variance = array_variance_from_fitness(pert_aa_rel_fitness)
         np.savetxt(args.rel_fitness_variance_csv, pert_aa_rel_fitness_variance, delimiter=",")
 
-    unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
+    #calculate absolute fitness (time constants) of perturbed mutants
     pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
+
+    #calculate fitness of mutants, normalized to unperturbed wild-type (time constant)
     pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
+    unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
+
+    #old code for error propagation
     #pert_aa_abs_fitness, pert_aa_abs_variance = array_scalar_prod(pert_aa_rel_fitness+1, pert_dw, pert_aa_rel_variance)
     #pert_aa_norm_fitness, pert_aa_norm_variance = array_scalar_prod(pert_aa_abs_fitness, 1/unpert_dw, pert_aa_abs_variance)
-
     #interaction_product_term, interaction_product_variance = array_prod(pert_aa_norm_fitness, unpert_aa_norm_fitness, pert_aa_norm_variance, unpert_aa_norm_variance)
     #interactions, interaction_variance = array_diff(pert_aa_norm_fitness, interaction_product_term, pert_aa_norm_variance, interaction_product_variance)
+
+    #calculate interaction of mutant and perturbation (wild-type will always be zero)
     interactions = pert_aa_norm_fitness - pert_aa_norm_fitness*unpert_aa_norm_fitness
+
+    #output interaction matrix as pickle for visualization group
     if args.interaction_pickle is not None:
         out_array = interactions
         out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
         pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
+    #messy code for debugging (sometimes plots heatmaps)
     '''
-
     pert_range = (np.nanmin(pert_aa_rel_fitness),np.nanmax(pert_aa_rel_fitness))
 
     row_labels = [x for x,y in sorted(aa_index.items(), key=lambda x: x[1])]
