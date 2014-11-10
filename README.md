@@ -33,9 +33,14 @@ python scripts/aa_fitness_from_file.py test_files/test_barcode_fitness_1.pkl tes
 
 ###Description
 
-Given amino acid fitness matrices (pickles) for different perturbations/days as input files, clusters perturbations. First, only matrix items which are real numbers in all matrices are considered, second, distances in "fitness space" are calculated between each matrix, resulting in a distance matrix. Alternatively, distances can be calculated between mean fitnesses for each amino acid position. Finally, perturbations are hierarchically clustered based on distance matrix. The results are visualized as a dendrogram of mean position fitnesses.
+Given amino acid fitness matrices or interaction matrices (pickles) for different perturbations/days as input files, clusters perturbations. First, only matrix items which are real numbers in all matrices are considered, second, distances in "fitness space" or "interaction space" are calculated between each matrix, resulting in a distance matrix. Alternatively, distances can be calculated between mean values for each amino acid position. Finally, perturbations are hierarchically clustered based on distance matrix. The results are visualized as a dendrogram of position mean values.
 
 ###Example Usage
+
 ```bash
-python scripts/cluster_perturbations.py pert1_fitness.pkl pert2_fitness.pkl pert3_fitness.pkl --pert_names pert1 pert2 pert3
+python scripts/cluster_perturbations.py pert1_fitness.pkl pert2_fitness.pkl pert3_fitness.pkl --data_type rel_fitness --pert_names pert1 pert2 pert3 --out_plot clustered_perts_fitness.png
+```
+
+```bash
+python scripts/cluster_perturbations.py pert1_interaction.pkl pert2_interaction.pkl pert3_interaction.pkl --data_type interaction --pert_names pert1 pert2 pert3 --out_plot clustered_perts_interaction.png
 ```
