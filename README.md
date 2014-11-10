@@ -15,7 +15,7 @@ Outputs in two different file formats, pickles for downstream visualization and 
 ###Example Usage
 ```bash
 python scripts/aa_fitness_from_file.py -h
-``
+```
 
 ```bash
 python scripts/aa_fitness_from_file.py test_files/test_barcode_fitness_1.pkl test_files/test_barcode_fitness_2.pkl --wt_time_constants 0.33 0.2 --allele_dict input_files/allele_dic_with_WT.pkl --translate_dict input_files/translate.pkl --wt_codon_dict input_files/wt_codon_dict.pkl --aa_index input_files/aminotonumber.pkl --weighted_mean --codon_fitness_pickle codon_fitness.pkl --rel_fitness_csv rel_fitness.csv --rel_fitness_pickle rel_fitness.pkl --rel_fitness_variance_csv rel_fitness_variance.csv --sequence_entropy_pickle sequence_entropy.pkl --information_content_pickle information_content.pkl --interaction_pickle interaction.pkl
@@ -27,17 +27,33 @@ python scripts/aa_fitness_from_file.py test_files/test_barcode_fitness_1.pkl tes
 
 This script takes in two fitness matrices along with the variance matrix and outputs the difference matrix, difference array along position, Wald test p value matrix, and Wald test p value array along position.
 
-Wald test: For each allele (pos, aa), we test the difference of the fitness values for this allele in the two matrices (f<sub>i</sub> - f_j). The null hypothesis is f_i - f_j = 0. A chi-squared distribution is used to compute the p value.
+Wald test: For each allele (pos, aa), we test the difference of the fitness values for this allele in the two matrices (f<sub>i</sub> - f<sub>j</sub>). The null hypothesis is f<sub>i</sub> - f<sub>j</sub> = 0. A chi-squared distribution is used to compute the p value.
 
 ### Files
-**Make sure the following directories are present:**
-data_files/ : input csv files containing matrices of fitness values
-out_files/ : where the output csv files will be stored
+**Make sure the following directories are present:**  
+data_files/ : input csv files containing matrices of fitness values  
+out_files/ : where the output csv files will be stored  
 
 (These directories can be changed at the top of the diff.r script.)
 
-Constants:
+**Constants:**
+(Also located at the top of the diff.r script
 
+File separation, change based on operating system
+
+```
+FSEP = "/"
+```
+
+Change significance level (alpha) as needed
+```
+ALPHA = 0.05
+```
+
+Output:  
+```
+diff
+```
 
 
 
