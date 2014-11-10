@@ -41,17 +41,21 @@ calc_wald <- function(dmat, err, alpha){
 
 compress_to_pos <- function(mat){
 
-    '''compress to array at position'''
+    '''Compress to array at position'''
 
     return colMeans(mat, na.rm=TRUE)
 }
 
 to_csv <- function(fname){
 
+    '''Turns filename string into filename.csv'''
+
     return paste(fname, 'csv', sep='.')
 }
 
 run <- function(fname1, fname2, err){
+
+    '''Main run '''
 
     # load data (no row or column names)
     dat1 = read.csv(paste(FDIR, to_csv(fname1), sep=FSEP), header=FALSE, check.names=FALSE) # row.names=1

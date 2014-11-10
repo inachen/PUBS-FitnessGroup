@@ -1,0 +1,17 @@
+mat <- c(0,0)
+mat
+mat <- (c(0,0), c(0,0))
+mat <- c(c(0,0), c(0,0))
+mat
+mat + 2
+mat ^2
+(mat+2)^2
+p = 0
+err = c(1,2,3,4)
+W <- (mat - p)^2 / err
+W
+mat = c(1,2,10,4)
+W <- (mat - p)^2 / err
+W
+pval = 1-pchisq(W, df=1)
+pval
