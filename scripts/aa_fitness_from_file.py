@@ -11,7 +11,7 @@ import argparse
 #import matplotlib.image as mpimg
 
 '''Given relative barcode fitnesses, calculates relative codon and amino acid fitnesses, as well as sequence
-entropy. Also, given time constants for perturbed and unperturbed wildtype, calculates epistatic interaction
+entropy and information content. Also, given time constants for perturbed and unperturbed wildtype, calculates epistatic interaction
 of each mutant with the perturbation. Currently propagates variance from standard error of barcode fitnesses,
 but implements an empty function for estimating variance from a fitness to variance distribution.
 
@@ -32,63 +32,6 @@ def array_weighted_mean(l, variances):
         mean = float(new_var * np.sum(real_vals/real_variances**2))
         return mean, new_var
     return None
-
-#These functions were written to perform array operations while propagating variance.
-'''
-def array_mean(l, variances=None):
-    """Calculates simple average of list. If variances for each value are provided, also returns combined variance"""
-    mean = 0
-    var = 0
-    n = len(l)
-    if n > 0:
-        mean = float(sum(l)/n)
-        if variances is not None and len(variances) == n:
-            var = sum(variances)/n**2
-            return mean, var
-        else:
-            return mean
-    return None
-
-def array_sum(mA, mB, vA=None, vB=None):
-    """Adds matrices. If matrices with variance for each value provided, returns variance of new matrix.
-    (assumes independence of variables)"""
-    if vA is None or vB is None:
-        return mA+mB
-    else:
-        return mA+mB,vA+vB
-
-def array_diff(mA, mB, vA=None, vB=None):
-    """Subtracts matrices. If matrices with variance for each value provided, returns variance of new matrix.
-    (assumes independence of variables)"""
-    if vA is None or vB is None:
-        return mA-mB
-    else:
-        return mA-mB,vA+vB
-
-def array_prod(mA, mB, vA=None, vB=None):
-    """Multiplies matrices. If matrices with variance for each value provided, returns estimate of variance
-    of new matrix. (assumes normality/independence of variables)"""
-    if vA is None or vB is None:
-        return mA*mB
-    else:
-        return mA*mB,(mB**2)*vA + (mA**2)*vB
-
-def array_scalar_prod(m, a, v=None):
-    """Multiplies scalar by matrix. If matrix with variance for each value provided, returns variance of
-    new matrix"""
-    if v is None:
-        return a*m
-    else:
-        return a*m,(a**2)*v
-
-def array_ratio(mA, mB, vA=None, vB=None):
-    """Divides mA by mB. If matrices with variance for each value provided, returns estimate of variance
-    of new matrix. (assumes normality/independence of variables)"""
-    if vA is None or vB is None:
-        return mA/mB
-    else:
-        return mA/mB,(mB**2)*vA + (mA**2)*vB
-'''
 
 def rna_to_dna(x):
     '''Converts any RNA sequence to a DNA sequence'''
@@ -171,18 +114,23 @@ def variance_from_fitness(fitness):
     return np.nan
 
 def calculate_sequence_entropy(matrix, aa_index):
+    '''Calculates amino acid sequence entropy in bits. Sets lowest fitness value to -1, adds 1, then divides
+    each fitness value at a given position by the total sum of fitness values at that position. Entropy
+    is calculated by ignoring all NaN.'''
     #zeroed matrix has null growth as 0. Any fitness less than -1 is set to -1 as null.
     stop_index = aa_index['STOP']
-    aa_indices = [x for x in range(np.alen(matrix)) if x is not stop_index]
+    aa_indices = [x for x in range(len(matrix)) if x != stop_index]
+
     matrix_no_stop = matrix[aa_indices]
 
     zeroed_matrix = matrix_no_stop + 1
-    zeroed_matrix[np.where(zeroed_matrix < 0)] = 0
+    real_zeroed_matrix = zeroed_matrix[np.where(np.isnan(zeroed_matrix))] = 0
+    zeroed_matrix[np.where(real_zeroed_matrix < 0)] = 0
 
     summed_matrix = np.nansum(zeroed_matrix, axis=0)
     prob_matrix = zeroed_matrix / summed_matrix
 
-    log_matrix = np.nan_to_num(np.log(prob_matrix))
+    log_matrix = np.nan_to_num(np.log2(prob_matrix))
     entropy_components = prob_matrix * log_matrix
     entropy = -np.nansum(entropy_components, axis=0)
 
@@ -210,7 +158,8 @@ if __name__ == '__main__':
     parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
     parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
     parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
-    parser.add_argument('--sequence_entropy_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of positional entropy')
+    parser.add_argument('--sequence_entropy_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of positional entropy (in bits)')
+    parser.add_argument('--information_content_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of information content (maximum entropy minus actual entropy, in bits)')
     parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
     args = parser.parse_args()
 
@@ -264,12 +213,25 @@ if __name__ == '__main__':
     if args.rel_fitness_variance_csv is not None:
         np.savetxt(args.rel_fitness_variance_csv, pert_aa_rel_variance, delimiter=",")
 
-    #calculate sequence entropy for perturbation, and save to pickle (for downstream visualization on structure)
-    if args.sequence_entropy_pickle is not None:
+    #calculate sequence entropy for perturbation (and information content), and save to pickle (for downstream visualization on structure)
+    if args.sequence_entropy_pickle is not None or args.information_content_pickle is not None:
         pert_aa_entropy = calculate_sequence_entropy(pert_aa_rel_fitness, aa_index)
-        pert_aa_entropy[np.where(np.isnan(pert_aa_entropy))] = NAN_REPLACEMENT
-        pickle.dump(pert_aa_entropy, open(args.sequence_entropy_pickle, 'w'))
+        
+        #information content is the difference of actual entropy from maximum entropy (estimated as even fitness for all fitnesses measured)
+        max_fitness = np.zeros_like(pert_aa_rel_fitness)
+        max_fitness[np.where(np.isnan(pert_aa_rel_fitness))] = np.nan
+        maximum_entropy = calculate_sequence_entropy(max_fitness, aa_index)
+        information_content = maximum_entropy - pert_aa_entropy
+        
+        if args.sequence_entropy_pickle is not None:
+            pert_aa_entropy[np.where(np.isnan(pert_aa_entropy))] = NAN_REPLACEMENT
+            pickle.dump(pert_aa_entropy, open(args.sequence_entropy_pickle, 'w'))
+        
+        if args.information_content_pickle is not None:
+            information_content[np.where(np.isnan(information_content))] = NAN_REPLACEMENT
+            pickle.dump(information_content, open(args.information_content_pickle, 'w'))
 
+    
     if args.interaction_pickle is not None:
         #time constants (reciprocal of doubling times)
         unpert_dw, pert_dw = args.wt_time_constants
@@ -281,12 +243,6 @@ if __name__ == '__main__':
         pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
         unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
 
-        #old code for error propagation
-        #pert_aa_abs_fitness, pert_aa_abs_variance = array_scalar_prod(pert_aa_rel_fitness+1, pert_dw, pert_aa_rel_variance)
-        #pert_aa_norm_fitness, pert_aa_norm_variance = array_scalar_prod(pert_aa_abs_fitness, 1/unpert_dw, pert_aa_abs_variance)
-        #interaction_product_term, interaction_product_variance = array_prod(pert_aa_norm_fitness, unpert_aa_norm_fitness, pert_aa_norm_variance, unpert_aa_norm_variance)
-        #interactions, interaction_variance = array_diff(pert_aa_norm_fitness, interaction_product_term, pert_aa_norm_variance, interaction_product_variance)
-
         #calculate interaction of mutant and perturbation (wild-type will always be zero)
         interactions = pert_aa_norm_fitness - pert_aa_norm_fitness*unpert_aa_norm_fitness
 
@@ -296,37 +252,4 @@ if __name__ == '__main__':
             out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
             pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
-    #messy code for debugging (sometimes plots heatmaps)
-    '''
-    pert_range = (np.nanmin(pert_aa_rel_fitness),np.nanmax(pert_aa_rel_fitness))
 
-    row_labels = [x for x,y in sorted(aa_index.items(), key=lambda x: x[1])]
-    column_labels = sorted(wt_codon_dict.keys())
-    plt.figure(figsize=(20,6), dpi=72)
-    ax1 = plt.subplot(111)
-    plt.title("Interactions", y=1.05)
-    #vmax = np.nanmax(aa_fitness_matrix)
-    #vmin = np.nanmin(aa_fitness_matrix)
-    #new_cmap = shiftedColorMap(plt.cm.seismic, start=0, midpoint=1 - vmax/(vmax + abs(vmin)), stop=1)
-    plt.title("Fitness", y=1.05)
-    #vmax = np.nanmax(aa_fitness_matrix)
-    #vmin = np.nanmin(aa_fitness_matrix)
-    #new_cmap = shiftedColorMap(plt.cm.seismic, start=0, midpoint=1 - vmax/(vmax + abs(vmin)), stop=1)
-    heatmap = plt.imshow(pert_aa_rel_fitness, cmap=plt.cm.YlGnBu_r, vmax=0, vmin=pert_range[0], interpolation="nearest")
-    #heatmap = plt.imshow(aa_fitness_matrix, cmap=new_cmap, interpolation="nearest")
-    #heatmap = plt.imshow(aa_fitness_matrix, cmap=plt.cm.seismic,vmax=0.3,vmin=-0.3, interpolation="nearest")
-    ax1.set_xticks(np.arange(column_labels[0], column_labels[-1], 5))
-    ax1.set_yticks(np.arange(interactions.shape[0]), minor=False)
-    plt.gca().set_xlim((-0.5, len(column_labels) - 0.5))
-    plt.gca().set_ylim((-0.5, len(row_labels) - 0.5))
-    ax1.invert_yaxis()
-    ax1.set_xticklabels(np.arange(column_labels[0] + 1, column_labels[-1] + 1, 5))
-    ax1.set_yticklabels(row_labels)
-
-    plt.xlabel("Sequence Position", labelpad=10)
-    plt.ylabel("Amino Acid", labelpad=10)
-    plt.colorbar(orientation='vertical', shrink=.68, pad=0.01)
-    plt.grid(False)
-    plt.tight_layout()
-    plt.show()
-    '''
