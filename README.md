@@ -27,7 +27,7 @@ python scripts/aa_fitness_from_file.py test_files/test_barcode_fitness_1.pkl tes
 
 This script takes in two fitness matrices along with the variance matrix and outputs the difference matrix, difference array along position, Wald test p value matrix, and Wald test p value array along position.
 
-Wald test: For each allele (pos, aa), we test the difference of the fitness values for this allele in the two matrices (`f_i - f_j`). The null hypothesis is f_i - f_j = 0. A chi-squared distribution is used to compute the p value.
+Wald test: For each allele (pos, aa), we test the difference of the fitness values for this allele in the two matrices (f<sub>i</sub> - f_j). The null hypothesis is f_i - f_j = 0. A chi-squared distribution is used to compute the p value.
 
 ### Files
 **Make sure the following directories are present:**
