@@ -36,23 +36,35 @@ out_files/ : where the output csv files will be stored
 
 (These directories can be changed at the top of the diff.r script.)
 
-**Constants:**
-(Also located at the top of the diff.r script
-
-File separation, change based on operating system
+###Constants:
+(Also located at the top of the diff.r script  
+  
+File separation, change based on operating system  
 
 ```
 FSEP = "/"
 ```
 
-Change significance level (alpha) as needed
+Change significance level (alpha) as needed  
 ```
 ALPHA = 0.05
 ```
 
-Output:  
+###Usage
+####Input
+If fitness matrices to be compared is stored in `data_files/fitness1.csv` and `data_files/fitness2.csv`, and the variance matrix is stroed in `data_files/variance.csv`, then
+
 ```
-diff
+run("fitness1", "fitness2", "variance")
+```
+
+
+####Output:  
+```
+out_files/diff_mat
+out_files/diff_lst
+out_files/wald_mat
+out_files/wald_lst
 ```
 
 
