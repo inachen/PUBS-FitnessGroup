@@ -65,7 +65,7 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
             barcode_lists = [barcode_fitness[x] for x in barcodes if not np.isnan(barcode_fitness[x][0])]
             if len(barcode_lists) > 0:
                 barcode_fitnesses = np.array([x[0] for x in barcode_lists])
-                barcode_stderrors = np.array([x[1] for x in barcode_lists])
+                barcode_stderrors = np.array([x[-1] for x in barcode_lists])
                 barcode_variances = barcode_stderrors**2
 
                 if weighted_mean:
