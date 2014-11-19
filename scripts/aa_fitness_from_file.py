@@ -41,6 +41,10 @@ def dna_to_rna(x):
     '''Converts any DNA sequence to a RNA sequence'''
     return x.replace('T','U').replace('t','u')
 
+def rev_complement(seq):
+    base_pairs = {'A': 'T', 'T': 'A', 'C':'G', 'G':'C'}
+    return ''.join([base_pairs[x] for x in seq])[::-1]
+
 def codon_to_barcodes(pos, codon, allele_dict):
     '''Returns a list of barcodes that map to a specific codon/position combination'''
     return [x for x,y in allele_dict.items() if y[1]==codon and y[0]==pos]
@@ -53,7 +57,7 @@ def syn_codons(codon, translate_dict):
     '''Returns a list of codons synonymous to a given codon'''
     return [x for x in aa_to_codons(translate_dict[codon], translate_dict) if x != codon]
 
-def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict, weighted_mean=True, stderror_not_included=False):
+def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict, weighted_mean=True, stderror_not_included=False, reverse_complement=False):
     '''Calculates fitness scores for all codons by averaging over fitness values for barcodes and
     returns as a dictionary of positions, then codons, where the corresponding value is a fitness score'''
     codon_fitnesses = {}
@@ -62,7 +66,10 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
     for pos in wt_codon_dict.keys():
         for codon in translate_dict.keys():
             barcodes = codon_to_barcodes(pos, codon, allele_dict)
-            barcode_lists = [barcode_fitness[x] for x in barcodes if not np.isnan(barcode_fitness[x][0])]
+            if reverse_complement:
+                barcodes = [rev_complement(x) for x in barcodes]
+     
+            barcode_lists = [barcode_fitness[x] for x in barcodes if x in barcode_fitness and not np.isnan(barcode_fitness[x][0])]
             if len(barcode_lists) > 0:
                 if stderror_not_included:
                     barcode_fitnesses = np.array(barcode_lists)
@@ -165,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--stderror_not_included', action='store_true', default=None, help='standard error not included with barcode fitnesses [default: False]')
     parser.add_argument('--variance_from_distribution', type=str, default=None, help='estimate aa variance from a fitness to variance distribution instead of propagating [default: False]')
     parser.add_argument('--no_nan_replacement', action='store_true', help='allows NaNs in CSV output files. [default:False]')
+    parser.add_argument('--reverse_complement_barcodes', action='store_true', help='reverse complements the barcodes before matching them to keys. [default:False]')
     #output options
     parser.add_argument('--codon_fitness_pickle', type=str, default=None, help='file to save pickle of codon fitnesses')
     parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
@@ -200,8 +208,8 @@ if __name__ == '__main__':
     pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
     
     #bin to codon fitness
-    unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included)
-    pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included)
+    unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
+    pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
 
     #average codon fitness to aa fitness
     unpert_aa_rel_fitness, unpert_aa_rel_variance = calculate_aa_fitness(unpert_codon_rel_fitness, unpert_codon_rel_variance, wt_codon_dict, dna_translate_dict, aa_index)
