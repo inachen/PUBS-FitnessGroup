@@ -29,7 +29,7 @@ def array_weighted_mean(l, variances):
     n = len(l)
     if n > 0 and n == len(real_variances):
         new_var = float(1/np.sum(1/real_variances**2))
-        mean = float(new_var * np.sum(real_vals/real_variances**2))
+        mean = float(new_var * np.sum(real_vals / real_variances**2))
         return mean, new_var
     return None
 
@@ -53,7 +53,7 @@ def syn_codons(codon, translate_dict):
     '''Returns a list of codons synonymous to a given codon'''
     return [x for x in aa_to_codons(translate_dict[codon], translate_dict) if x != codon]
 
-def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict, weighted_mean=True):
+def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict, weighted_mean=True, stderror_not_included=False):
     '''Calculates fitness scores for all codons by averaging over fitness values for barcodes and
     returns as a dictionary of positions, then codons, where the corresponding value is a fitness score'''
     codon_fitnesses = {}
@@ -64,9 +64,13 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
             barcodes = codon_to_barcodes(pos, codon, allele_dict)
             barcode_lists = [barcode_fitness[x] for x in barcodes if not np.isnan(barcode_fitness[x][0])]
             if len(barcode_lists) > 0:
-                barcode_fitnesses = np.array([x[0] for x in barcode_lists])
-                barcode_stderrors = np.array([x[-1] for x in barcode_lists])
-                barcode_variances = barcode_stderrors**2
+                if stderror_not_included:
+                    barcode_fitnesses = np.array(barcode_lists)
+                    barcode_variances = np.ones_like(barcode_lists) #create uniform dummy variance for compatibility
+                else:
+                    barcode_fitnesses = np.array([x[0] for x in barcode_lists])
+                    barcode_stderrors = np.array([x[1] for x in barcode_lists])
+                    barcode_variances = barcode_stderrors**2
 
                 if weighted_mean:
                     codon_fitness, codon_variance = array_weighted_mean(barcode_fitnesses, barcode_variances)
@@ -113,10 +117,10 @@ def variance_from_fitness(fitness):
     Needs input.'''
     return np.nan
 
-def calculate_sequence_entropy(matrix, aa_index):
-    '''Calculates amino acid sequence entropy in bits. Sets lowest fitness value to -1, adds 1, then divides
-    each fitness value at a given position by the total sum of fitness values at that position. Entropy
-    is calculated by ignoring all NaN.'''
+
+def calculate_amino_frequencies(matrix, aa_index):
+    '''Calculates pseudo-amino acid frequencies based on fitness. Sets lowest fitness value to -1, adds 1, then divides
+    each fitness value at a given position by the total sum of fitness values at that position. All NaNs are ignored'''
     #zeroed matrix has null growth as 0. Any fitness less than -1 is set to -1 as null.
     stop_index = aa_index['STOP']
     aa_indices = [x for x in range(len(matrix)) if x != stop_index]
@@ -128,10 +132,16 @@ def calculate_sequence_entropy(matrix, aa_index):
     zeroed_matrix[np.where(real_zeroed_matrix < 0)] = 0
 
     summed_matrix = np.nansum(zeroed_matrix, axis=0)
-    prob_matrix = zeroed_matrix / summed_matrix
+    freq_matrix = zeroed_matrix / summed_matrix
 
-    log_matrix = np.nan_to_num(np.log2(prob_matrix))
-    entropy_components = prob_matrix * log_matrix
+    return freq_matrix
+
+
+def calculate_sequence_entropy(freq_matrix):
+    '''Given, amino acid frequencies, calculates amino acid sequence entropy in bits.'''
+
+    log_matrix = np.nan_to_num(np.log2(freq_matrix))
+    entropy_components = freq_matrix * log_matrix
     entropy = -np.nansum(entropy_components, axis=0)
 
     return entropy
@@ -152,12 +162,15 @@ if __name__ == '__main__':
     parser.add_argument('--aa_index', type=str, default=None, help='pickle file encoding a dictionary of amino acids and corresponding indeces used for arranging while plotting')
     #running options
     parser.add_argument('--weighted_mean', action='store_true', help='use weighted mean (by inverse variance) to calculate codon fitness from barcode')
+    parser.add_argument('--stderror_not_included', action='store_true', default=None, help='standard error not included with barcode fitnesses [default: False]')
     parser.add_argument('--variance_from_distribution', type=str, default=None, help='estimate aa variance from a fitness to variance distribution instead of propagating [default: False]')
+    parser.add_argument('--no_nan_replacement', action='store_true', help='allows NaNs in CSV output files. [default:False]')
     #output options
     parser.add_argument('--codon_fitness_pickle', type=str, default=None, help='file to save pickle of codon fitnesses')
     parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
     parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
     parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
+    parser.add_argument('--amino_frequency_pickle', type=str, default=None, help='file to save pickle of two-dimensional array of pseudo-amino-frequencies derived from fitness')
     parser.add_argument('--sequence_entropy_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of positional entropy (in bits)')
     parser.add_argument('--information_content_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of information content (maximum entropy minus actual entropy, in bits)')
     parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
@@ -187,8 +200,8 @@ if __name__ == '__main__':
     pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
     
     #bin to codon fitness
-    unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean)
-    pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean)
+    unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included)
+    pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included)
 
     #average codon fitness to aa fitness
     unpert_aa_rel_fitness, unpert_aa_rel_variance = calculate_aa_fitness(unpert_codon_rel_fitness, unpert_codon_rel_variance, wt_codon_dict, dna_translate_dict, aa_index)
@@ -202,7 +215,8 @@ if __name__ == '__main__':
     #read out relative amino acid fitness matrix as a pickle (for visualization group)
     if args.rel_fitness_pickle is not None:
         out_array = np.copy(pert_aa_rel_fitness)
-        out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
+        if not args.no_nan_replacement:
+            out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
         pickle.dump(out_array, open(args.rel_fitness_pickle, 'w'))
 
     #read out relative amino acid fitness matrix as a CSV file (for difference matrix calculation)
@@ -214,21 +228,30 @@ if __name__ == '__main__':
         np.savetxt(args.rel_fitness_variance_csv, pert_aa_rel_variance, delimiter=",")
 
     #calculate sequence entropy for perturbation (and information content), and save to pickle (for downstream visualization on structure)
-    if args.sequence_entropy_pickle is not None or args.information_content_pickle is not None:
-        pert_aa_entropy = calculate_sequence_entropy(pert_aa_rel_fitness, aa_index)
+    if args.amino_frequency_pickle is not None or args.sequence_entropy_pickle is not None or args.information_content_pickle is not None:
+        pert_aa_freq = calculate_amino_frequencies(pert_aa_rel_fitness, aa_index)
+        pert_aa_entropy = calculate_sequence_entropy(pert_aa_freq)
         
         #information content is the difference of actual entropy from maximum entropy (estimated as even fitness for all fitnesses measured)
         max_fitness = np.zeros_like(pert_aa_rel_fitness)
         max_fitness[np.where(np.isnan(pert_aa_rel_fitness))] = np.nan
-        maximum_entropy = calculate_sequence_entropy(max_fitness, aa_index)
+        max_freq = calculate_amino_frequencies(max_fitness, aa_index)
+        maximum_entropy = calculate_sequence_entropy(max_freq)
         information_content = maximum_entropy - pert_aa_entropy
         
+        if args.amino_frequency_pickle is not None:
+            if not args.no_nan_replacement:
+                pert_aa_freq[np.where(np.isnan(pert_aa_freq))] = NAN_REPLACEMENT
+            pickle.dump(pert_aa_freq, open(args.amino_frequency_pickle, 'w'))
+
         if args.sequence_entropy_pickle is not None:
-            pert_aa_entropy[np.where(np.isnan(pert_aa_entropy))] = NAN_REPLACEMENT
+            if not args.no_nan_replacement:
+                pert_aa_entropy[np.where(np.isnan(pert_aa_entropy))] = NAN_REPLACEMENT
             pickle.dump(pert_aa_entropy, open(args.sequence_entropy_pickle, 'w'))
         
         if args.information_content_pickle is not None:
-            information_content[np.where(np.isnan(information_content))] = NAN_REPLACEMENT
+            if not args.no_nan_replacement:
+                information_content[np.where(np.isnan(information_content))] = NAN_REPLACEMENT
             pickle.dump(information_content, open(args.information_content_pickle, 'w'))
 
     
@@ -239,7 +262,7 @@ if __name__ == '__main__':
         #calculate absolute fitness (time constants) of perturbed mutants
         pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
 
-        #calculate fitness of mutants, normalized to unperturbed wild-type (time constant)
+        #calculate fitness of mutants, normalized to unperturbed ype (time constant)
         pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
         unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
 
@@ -249,7 +272,8 @@ if __name__ == '__main__':
         #output interaction matrix as pickle for visualization group
         if args.interaction_pickle is not None:
             out_array = interactions
-            out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
+            if not args.no_nan_replacement:
+                out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
             pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
 
