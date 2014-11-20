@@ -125,20 +125,29 @@ def variance_from_fitness(fitness):
     return np.nan
 
 
-def calculate_amino_frequencies(matrix, aa_index):
-    '''Calculates pseudo-amino acid frequencies based on fitness. Sets lowest fitness value to -1, adds 1, then divides
-    each fitness value at a given position by the total sum of fitness values at that position. All NaNs are ignored'''
+def calculate_amino_frequencies(matrix, aa_index, subtract_stop=True):
+    '''Calculates pseudo-amino acid frequencies based on fitness. Assumes average STOP codon fitness as null, sets
+    all fitness values lower than null, sets null to 0, and calculates each fitness value at a given position by
+    the total sum of fitness values at that position. All NaNs are ignored'''
     #zeroed matrix has null growth as 0. Any fitness less than -1 is set to -1 as null.
     stop_index = aa_index['STOP']
+
     aa_indices = [x for x in range(len(matrix)) if x != stop_index]
 
     matrix_no_stop = matrix[aa_indices]
 
-    zeroed_matrix = matrix_no_stop + 1
+    if subtract_stop:
+        stop_fitness = np.nanmean(matrix[stop_index])
+        zeroed_matrix = matrix_no_stop - stop_fitness
+    else:
+        zeroed_matrix = matrix_no_stop + 1
+    zeroed_matrix[np.where(zeroed_matrix < 0)] = 0
+
     real_zeroed_matrix = zeroed_matrix[np.where(np.isnan(zeroed_matrix))] = 0
     zeroed_matrix[np.where(real_zeroed_matrix < 0)] = 0
 
     summed_matrix = np.nansum(zeroed_matrix, axis=0)
+
     freq_matrix = zeroed_matrix / summed_matrix
 
     return freq_matrix
@@ -179,6 +188,7 @@ if __name__ == '__main__':
     parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
     parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
     parser.add_argument('--amino_frequency_pickle', type=str, default=None, help='file to save pickle of two-dimensional array of pseudo-amino-frequencies derived from fitness')
+    #parser.add_argument('--mean_fitness_pickle', type=str, default=None, help='file to save pickle of mean positional fitness')
     parser.add_argument('--sequence_entropy_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of positional entropy (in bits)')
     parser.add_argument('--information_content_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of information content (maximum entropy minus actual entropy, in bits)')
     parser.add_argument('--interaction_pickle', type=str, default=None, help='file to save pickle of interaction terms')
@@ -243,7 +253,7 @@ if __name__ == '__main__':
         #information content is the difference of actual entropy from maximum entropy (estimated as even fitness for all fitnesses measured)
         max_fitness = np.zeros_like(pert_aa_rel_fitness)
         max_fitness[np.where(np.isnan(pert_aa_rel_fitness))] = np.nan
-        max_freq = calculate_amino_frequencies(max_fitness, aa_index)
+        max_freq = calculate_amino_frequencies(max_fitness, aa_index, subtract_stop=False)
         maximum_entropy = calculate_sequence_entropy(max_freq)
         information_content = maximum_entropy - pert_aa_entropy
         
