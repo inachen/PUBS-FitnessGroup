@@ -140,10 +140,11 @@ def calculate_amino_frequencies(matrix, aa_index, subtract_stop=True):
         stop_fitness = np.nanmean(matrix[stop_index])
         zeroed_matrix = matrix_no_stop - stop_fitness
     else:
-        zeroed_matrix = matrix_no_stop + 1
-    zeroed_matrix[np.where(zeroed_matrix < 0)] = 0
+        zeroed_matrix = matrix_no_stop + 1.0
 
-    real_zeroed_matrix = zeroed_matrix[np.where(np.isnan(zeroed_matrix))] = 0
+    real_zeroed_matrix = zeroed_matrix.copy()
+    real_zeroed_matrix[np.where(np.isnan(real_zeroed_matrix))] = 0
+
     zeroed_matrix[np.where(real_zeroed_matrix < 0)] = 0
 
     summed_matrix = np.nansum(zeroed_matrix, axis=0)
@@ -156,9 +157,15 @@ def calculate_amino_frequencies(matrix, aa_index, subtract_stop=True):
 def calculate_sequence_entropy(freq_matrix):
     '''Given, amino acid frequencies, calculates amino acid sequence entropy in bits.'''
 
+    print list(freq_matrix)
+
     log_matrix = np.nan_to_num(np.log2(freq_matrix))
+    freq_matrix[np.where(np.isnan(freq_matrix))]=0
     entropy_components = freq_matrix * log_matrix
     entropy = -np.nansum(entropy_components, axis=0)
+
+    print list(log_matrix)
+    print list(entropy)
 
     return entropy
 
