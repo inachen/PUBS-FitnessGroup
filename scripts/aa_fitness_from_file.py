@@ -55,7 +55,7 @@ def aa_to_codons(aa, translate_dict):
 
 def syn_codons(codon, translate_dict):
     '''Returns a list of codons synonymous to a given codon'''
-    return [x for x in aa_to_codons(translate_dict[codon], translate_dict) if x != codon]
+    return [x for x in aa_to_codons(translate_dict[codon], translate_dict)]
 
 def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, translate_dict, weighted_mean=True, stderror_not_included=False, reverse_complement=False):
     '''Calculates fitness scores for all codons by averaging over fitness values for barcodes and
@@ -63,9 +63,16 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
     codon_fitnesses = {}
     codon_variances = {}
 
-    for pos in wt_codon_dict.keys():
+    wt_barcodes = codon_to_barcodes(0, 'WT', allele_dict)
+
+    for pos, wt_codon in wt_codon_dict.items():
         for codon in translate_dict.keys():
             barcodes = codon_to_barcodes(pos, codon, allele_dict)
+
+            if codon==wt_codon:
+                barcode_num = len(barcodes)
+                barcodes.extend(wt_barcodes)
+
             if reverse_complement:
                 barcodes = [rev_complement(x) for x in barcodes]
      
@@ -76,7 +83,7 @@ def codon_fitness_from_barcodes(barcode_fitness, allele_dict, wt_codon_dict, tra
                     barcode_variances = np.ones_like(barcode_lists) #create uniform dummy variance for compatibility
                 else:
                     barcode_fitnesses = np.array([x[0] for x in barcode_lists])
-                    barcode_stderrors = np.array([x[1] for x in barcode_lists])
+                    barcode_stderrors = np.array([x[-1] for x in barcode_lists])
                     barcode_variances = barcode_stderrors**2
 
                 if weighted_mean:
@@ -157,15 +164,10 @@ def calculate_amino_frequencies(matrix, aa_index, subtract_stop=True):
 def calculate_sequence_entropy(freq_matrix):
     '''Given, amino acid frequencies, calculates amino acid sequence entropy in bits.'''
 
-    print list(freq_matrix)
-
     log_matrix = np.nan_to_num(np.log2(freq_matrix))
     freq_matrix[np.where(np.isnan(freq_matrix))]=0
     entropy_components = freq_matrix * log_matrix
     entropy = -np.nansum(entropy_components, axis=0)
-
-    print list(log_matrix)
-    print list(entropy)
 
     return entropy
 
@@ -218,15 +220,26 @@ if __name__ == '__main__':
     translate_dict = pickle.load(open(args.translate_dict, 'rb'))
     dna_translate_dict = {rna_to_dna(x):y for x,y in translate_dict.items()} #uracil's for suckers
     wt_codon_dict = pickle.load(open(args.wt_codon_dict, 'rb'))
+    wt_aa_dict = {k:dna_translate_dict[v] for k,v in wt_codon_dict.items()}
     aa_index = pickle.load(open(args.aa_index, 'rb'))
-    
+    wt_aa_index = {k:aa_index[v] for k,v in wt_aa_dict.items()}
+
     #get barcode fitness
     unpert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[0], 'rb')) #key is barcode. value is tuple with slope and standard error
+    #unpert_barcode_rel_fitness
+
     pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
     
     #bin to codon fitness
     unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
     pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
+
+    #read out relative codon fitness matrix as a pickle
+    if args.codon_fitness_pickle is not None:
+        out_dict = pert_codon_rel_fitness.copy()
+        if not args.no_nan_replacement:
+            out_dict = {k:v if not np.isnan(v) else NAN_REPLACEMENT for k,v in out_dict.items()}
+        pickle.dump(out_dict, open(args.codon_fitness_pickle, 'w'))
 
     #average codon fitness to aa fitness
     unpert_aa_rel_fitness, unpert_aa_rel_variance = calculate_aa_fitness(unpert_codon_rel_fitness, unpert_codon_rel_variance, wt_codon_dict, dna_translate_dict, aa_index)
@@ -291,8 +304,14 @@ if __name__ == '__main__':
         pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
         unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
 
+        pert_aa_norm_wt_fitness = np.array([pert_aa_norm_fitness[aa,pos-2] for pos,aa in sorted(wt_aa_index.items())])
         #calculate interaction of mutant and perturbation (wild-type will always be zero)
-        interactions = pert_aa_norm_fitness - pert_aa_norm_fitness*unpert_aa_norm_fitness
+        #interaction is F_mut+pert - F_mut_unpert*F_wt_pert
+        interactions = pert_aa_norm_fitness - pert_aa_norm_wt_fitness*unpert_aa_norm_fitness
+
+        #set wt to zero, because there should be no interaction
+        #for pos,aa in sorted(wt_aa_index.items())[:-1]:
+        #    interactions[aa,pos-2] = 0
 
         #output interaction matrix as pickle for visualization group
         if args.interaction_pickle is not None:

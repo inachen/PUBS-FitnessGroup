@@ -57,7 +57,8 @@ else: #calculate distance between position means in all arrays
 #determine colormap based on input data
 if args.data_type == 'rel_fitness':
     cmap = pylab.cm.YlGnBu_r
-    vmin = -1 #null
+    mean_stop = np.nanmin(np.array([np.nanmean(x[0]) for x in data_arrays]))
+    vmin = max(-1, mean_stop) #null or lowest
     vmax = 0 #WT
 elif args.data_type == 'interaction':
     print "test"
@@ -70,16 +71,16 @@ clusters = ward(distance_matrix)
 
 # Generate random features and distance matrix.
 # Compute and plot first dendrogram.
-fig = pylab.figure(figsize=(8,2))
+fig = pylab.figure(figsize=(16,3.5))
 
 #plot dendrogram
-ax1 = fig.add_axes([0.09,0.1,0.1,0.55])
+ax1 = fig.add_axes([0.04,0.18,0.05,0.50])
 dendro = dendrogram(clusters, orientation='right')
 ax1.set_xticks([])
 ax1.set_yticks([])
 
 # Plot distance matrix.
-axmatrix = fig.add_axes([0.19,0.1,0.6,0.55])
+axmatrix = fig.add_axes([0.09,0.18,0.8,0.50])
 idx1 = dendro['leaves']
 sorted_distance_matrix = distance_matrix[idx1,:]
 sorted_mean_data_array = mean_data_arrays[idx1,:]
@@ -89,17 +90,25 @@ if args.pert_names is not None:
 else:
     sorted_labels=[]
 im = axmatrix.matshow(sorted_mean_data_array, aspect='auto', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-axmatrix.set_xticks([])
+axmatrix.set_xticks(range(0,76))
+axmatrix.xaxis.set_ticks_position('bottom')
+axmatrix.set_xticklabels(range(2,78), fontsize=9, y=0.02)
 axmatrix.set_yticks(range(len(sorted_labels)))
-axmatrix.set_yticklabels(sorted_labels)
+axmatrix.set_yticklabels(sorted_labels, fontsize=12)
 axmatrix.yaxis.tick_right()
 axmatrix.yaxis.set_label_position('right')
+axmatrix.grid(False)
+axmatrix.set_title("Mean Fitness for Perturbations", y=1.35, fontsize=18)
+axmatrix.set_ylabel("Perturbations", labelpad=10, fontsize=14)
+axmatrix.set_xlabel("Position",labelpad=10, fontsize=14)
+
 
 # Plot colorbar.
-axcolor = fig.add_axes([0.19,0.7,0.6,0.1])
+axcolor = fig.add_axes([0.09,0.7,0.8,0.05])
 pylab.colorbar(im, cax=axcolor, orientation='horizontal')
 axcolor.xaxis.tick_top()
 axcolor.xaxis.set_label_position('top')
+
 
 #fig.set_tight_layout(True)
 if args.out_plot is not None:
