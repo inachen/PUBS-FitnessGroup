@@ -25,7 +25,7 @@ python scripts/aa_fitness_from_file.py Barcode_FitScore_DMSO_day1_outliers_remov
 
 ###Description
 
-Given relative amino acid fitnesses for different perturbations/days in pickles, clusters each sample based on every non-NaN fitness value or on mean values per position. Alternatively, epistatic interaction maps can be provided. Perturbations are then hierarchically clustered with Ward clustering, and a plot of mean values for each perturbation with the perturbations ordered by similarity is saved.
+Given amino acid fitness matrices (pickles) for different perturbations/days as input files, clusters perturbations. First, only matrix items which are real numbers in all matrices are considered, second, distances in "fitness space" are calculated between each matrix, resulting in a distance matrix. Alternatively, distances can be calculated between mean fitnesses for each amino acid position. Finally, perturbations are hierarchically clustered based on distance matrix. The results are visualized as a dendrogram of mean position fitnesses.
 
 ###Example Usage
 ```bash
@@ -80,17 +80,4 @@ out_files/diff_mat
 out_files/diff_lst
 out_files/wald_mat
 out_files/wald_lst
-```
-
-
-
-##cluster_perturbations.py
-
-###Description
-
-Given amino acid fitness matrices (pickles) for different perturbations/days as input files, clusters perturbations. First, only matrix items which are real numbers in all matrices are considered, second, distances in "fitness space" are calculated between each matrix, resulting in a distance matrix. Alternatively, distances can be calculated between mean fitnesses for each amino acid position. Finally, perturbations are hierarchically clustered based on distance matrix. The results are visualized as a dendrogram of mean position fitnesses.
-
-###Example Usage
-```bash
-python scripts/cluster_perturbations.py pert1_fitness.pkl pert2_fitness.pkl pert3_fitness.pkl --pert_names pert1 pert2 pert3
 ```
