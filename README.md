@@ -45,6 +45,10 @@ Given one or more amino acid fitness matrices or interactions (pickles), plots h
 ###Example Usage
 
 ```bash
+python scripts/plot_heatmap.py -h
+```
+
+```bash
 python scripts/plot_heatmap.py amino_fitness_mg132_day1.pkl amino_fitness_mg132_day2.pkl --aa_index input_files/aminotonumber.pkl --data_type fitness --plot_titles 'MG132 Day 1 Fitness' 'MG132 Day 2 Fitness' -o fitness_plot.png
 ```
 
