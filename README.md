@@ -45,7 +45,11 @@ Given one or more amino acid fitness matrices or interactions (pickles), plots h
 ###Example Usage
 
 ```bash
-python scripts/plot_heatmap.py interaction_mg132day2_dmsoday1.pkl interaction_mg132day2_dmsoday2.pkl --aa_index input_files/aminotonumber.pkl --data_type interaction --plot_titles 'MG132 Day2/DMSO Day 1 Epistatic Interaction' 'MG132 Day2/DMSO Day 2 Epistatic Interaction' -o plot.png
+python scripts/plot_heatmap.py amino_fitness_mg132_day1.pkl amino_fitness_mg132_day2.pkl --aa_index input_files/aminotonumber.pkl --data_type fitness --plot_titles 'MG132 Day 1 Fitness' 'MG132 Day 2 Fitness' -o fitness_plot.png
+```
+
+```bash
+python scripts/plot_heatmap.py interaction_mg132day2_dmsoday1.pkl interaction_mg132day2_dmsoday2.pkl --aa_index input_files/aminotonumber.pkl --data_type interaction --plot_titles 'MG132 Day2/DMSO Day 1 Epistatic Interaction' 'MG132 Day2/DMSO Day 2 Epistatic Interaction' -o interaction_plot.png
 ```
 
 ##diff.r
