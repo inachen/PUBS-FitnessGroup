@@ -193,9 +193,9 @@ if __name__ == '__main__':
     parser.add_argument('--reverse_complement_barcodes', action='store_true', help='reverse complements the barcodes before matching them to keys. [default:False]')
     #output options
     parser.add_argument('--codon_fitness_pickle', type=str, default=None, help='file to save pickle of codon fitnesses')
-    parser.add_argument('--rel_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
-    parser.add_argument('--rel_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
-    parser.add_argument('--rel_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
+    parser.add_argument('--amino_fitness_csv', type=str, default=None, help='file to save CSV of fitness array')
+    parser.add_argument('--amino_fitness_pickle', type=str, default=None, help='file to save pickle of fitness array')
+    parser.add_argument('--amino_fitness_variance_csv', type=str, default=None, help='file to save CSV of variances of fitness values')
     parser.add_argument('--amino_frequency_pickle', type=str, default=None, help='file to save pickle of two-dimensional array of pseudo-amino-frequencies derived from fitness')
     #parser.add_argument('--mean_fitness_pickle', type=str, default=None, help='file to save pickle of mean positional fitness')
     parser.add_argument('--sequence_entropy_pickle', type=str, default=None, help='file to save pickle of one-dimensional array of positional entropy (in bits)')
@@ -216,6 +216,7 @@ if __name__ == '__main__':
 
 
     #read in necessary reference pickles
+    print "Reading input files"
     allele_dict = pickle.load(open(args.allele_dict, 'rb')) 
     translate_dict = pickle.load(open(args.translate_dict, 'rb'))
     dna_translate_dict = {rna_to_dna(x):y for x,y in translate_dict.items()} #uracil's for suckers
@@ -225,99 +226,105 @@ if __name__ == '__main__':
     wt_aa_index = {k:aa_index[v] for k,v in wt_aa_dict.items()}
 
     #get barcode fitness
-    unpert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[0], 'rb')) #key is barcode. value is tuple with slope and standard error
-    #unpert_barcode_rel_fitness
-
-    pert_barcode_rel_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
-    
-    #bin to codon fitness
-    unpert_codon_rel_fitness, unpert_codon_rel_variance = codon_fitness_from_barcodes(unpert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
-    pert_codon_rel_fitness, pert_codon_rel_variance = codon_fitness_from_barcodes(pert_barcode_rel_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
+    unpert_barcode_fitness = pickle.load(open(args.barcode_fitness[0], 'rb')) #key is barcode. value is tuple with slope and standard error
+    pert_barcode_fitness = pickle.load(open(args.barcode_fitness[1], 'rb')) 
+ 
+    print "Calculating codon fitness"   
+    #barcode to codon fitness
+    unpert_codon_fitness, unpert_codon_variance = codon_fitness_from_barcodes(unpert_barcode_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
+    pert_codon_fitness, pert_codon_variance = codon_fitness_from_barcodes(pert_barcode_fitness, allele_dict, wt_codon_dict, dna_translate_dict, args.weighted_mean, args.stderror_not_included, args.reverse_complement_barcodes)
 
     #read out relative codon fitness matrix as a pickle
     if args.codon_fitness_pickle is not None:
-        out_dict = pert_codon_rel_fitness.copy()
+        print "Saving codon fitness pickle"   
+        out_dict = pert_codon_fitness.copy()
         if not args.no_nan_replacement:
             out_dict = {k:v if not np.isnan(v) else NAN_REPLACEMENT for k,v in out_dict.items()}
         pickle.dump(out_dict, open(args.codon_fitness_pickle, 'w'))
 
     #average codon fitness to aa fitness
-    unpert_aa_rel_fitness, unpert_aa_rel_variance = calculate_aa_fitness(unpert_codon_rel_fitness, unpert_codon_rel_variance, wt_codon_dict, dna_translate_dict, aa_index)
-    pert_aa_rel_fitness, pert_aa_rel_variance = calculate_aa_fitness(pert_codon_rel_fitness, pert_codon_rel_variance, wt_codon_dict, dna_translate_dict, aa_index)
+    print "Calculating amino acid fitness"   
+    unpert_aa_fitness, unpert_aa_variance = calculate_aa_fitness(unpert_codon_fitness, unpert_codon_variance, wt_codon_dict, dna_translate_dict, aa_index)
+    pert_aa_fitness, pert_aa_variance = calculate_aa_fitness(pert_codon_fitness, pert_codon_variance, wt_codon_dict, dna_translate_dict, aa_index)
 
     #if user provided some input file with a fitness-variance distribution, pass to function (needs to be written)
     if args.variance_from_distribution is not None:
-        unpert_aa_rel_variance = array_variance_from_fitness(unpert_aa_rel_fitness)
-        pert_aa_rel_variance = array_variance_from_fitness(pert_aa_rel_fitness)
+        unpert_aa_variance = array_variance_from_fitness(unpert_aa_fitness)
+        pert_aa_variance = array_variance_from_fitness(pert_aa_fitness)
 
     #read out relative amino acid fitness matrix as a pickle (for visualization group)
-    if args.rel_fitness_pickle is not None:
-        out_array = np.copy(pert_aa_rel_fitness)
+    if args.amino_fitness_pickle is not None:
+        print "Saving amino acid fitness to pickle"   
+        out_array = np.copy(pert_aa_fitness)
         if not args.no_nan_replacement:
             out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
-        pickle.dump(out_array, open(args.rel_fitness_pickle, 'w'))
+        pickle.dump(out_array, open(args.amino_fitness_pickle, 'w'))
 
     #read out relative amino acid fitness matrix as a CSV file (for difference matrix calculation)
-    if args.rel_fitness_csv is not None:
-        np.savetxt(args.rel_fitness_csv, pert_aa_rel_fitness, delimiter=",")
+    if args.amino_fitness_csv is not None:
+        print "Saving amino acid fitness to CSV"   
+        np.savetxt(args.amino_fitness_csv, pert_aa_fitness, delimiter=",")
 
     #read out relative amino acid fitness variance matrix as a CSV file (for hypothesis testing)
-    if args.rel_fitness_variance_csv is not None:
-        np.savetxt(args.rel_fitness_variance_csv, pert_aa_rel_variance, delimiter=",")
+    if args.amino_fitness_variance_csv is not None:
+        print "Saving amino acid variance to CSV"   
+        np.savetxt(args.amino_fitness_variance_csv, pert_aa_variance, delimiter=",")
 
     #calculate sequence entropy for perturbation (and information content), and save to pickle (for downstream visualization on structure)
     if args.amino_frequency_pickle is not None or args.sequence_entropy_pickle is not None or args.information_content_pickle is not None:
-        pert_aa_freq = calculate_amino_frequencies(pert_aa_rel_fitness, aa_index)
+        print "Calculating amino acid frequencies, entropies, and information content"   
+        pert_aa_freq = calculate_amino_frequencies(pert_aa_fitness, aa_index)
         pert_aa_entropy = calculate_sequence_entropy(pert_aa_freq)
         
         #information content is the difference of actual entropy from maximum entropy (estimated as even fitness for all fitnesses measured)
-        max_fitness = np.zeros_like(pert_aa_rel_fitness)
-        max_fitness[np.where(np.isnan(pert_aa_rel_fitness))] = np.nan
+        max_fitness = np.zeros_like(pert_aa_fitness)
+        max_fitness[np.where(np.isnan(pert_aa_fitness))] = np.nan
         max_freq = calculate_amino_frequencies(max_fitness, aa_index, subtract_stop=False)
         maximum_entropy = calculate_sequence_entropy(max_freq)
         information_content = maximum_entropy - pert_aa_entropy
         
         if args.amino_frequency_pickle is not None:
+            print "Saving amino acid frequencies to pickle"   
             if not args.no_nan_replacement:
                 pert_aa_freq[np.where(np.isnan(pert_aa_freq))] = NAN_REPLACEMENT
             pickle.dump(pert_aa_freq, open(args.amino_frequency_pickle, 'w'))
 
         if args.sequence_entropy_pickle is not None:
+            print "Saving positional entropies to pickle"   
             if not args.no_nan_replacement:
                 pert_aa_entropy[np.where(np.isnan(pert_aa_entropy))] = NAN_REPLACEMENT
             pickle.dump(pert_aa_entropy, open(args.sequence_entropy_pickle, 'w'))
         
         if args.information_content_pickle is not None:
+            print "Saving positional information content to pickle"   
             if not args.no_nan_replacement:
                 information_content[np.where(np.isnan(information_content))] = NAN_REPLACEMENT
             pickle.dump(information_content, open(args.information_content_pickle, 'w'))
 
     
     if args.interaction_pickle is not None:
+        print "Calculating epistatic interactions"   
         #time constants (reciprocal of doubling times)
         unpert_dw, pert_dw = args.wt_time_constants
 
         #calculate absolute fitness (time constants) of perturbed mutants
-        pert_aa_abs_fitness = (pert_aa_rel_fitness+1)*pert_dw
+        pert_aa_abs_fitness = (pert_aa_fitness+1)*pert_dw
 
-        #calculate fitness of mutants, normalized to unperturbed ype (time constant)
+        #calculate fitness of mutants, normalized to unperturbed wildtype (time constant)
         pert_aa_norm_fitness = pert_aa_abs_fitness/unpert_dw
-        unpert_aa_norm_fitness = unpert_aa_rel_fitness + 1
+        unpert_aa_norm_fitness = unpert_aa_fitness + 1
 
         pert_aa_norm_wt_fitness = np.array([pert_aa_norm_fitness[aa,pos-2] for pos,aa in sorted(wt_aa_index.items())])
-        #calculate interaction of mutant and perturbation (wild-type will always be zero)
+        
+        #calculate interaction of mutant and perturbation (wild-type should be ~zero)
         #interaction is F_mut+pert - F_mut_unpert*F_wt_pert
         interactions = pert_aa_norm_fitness - pert_aa_norm_wt_fitness*unpert_aa_norm_fitness
 
-        #set wt to zero, because there should be no interaction
-        #for pos,aa in sorted(wt_aa_index.items())[:-1]:
-        #    interactions[aa,pos-2] = 0
+        #output interaction matrix as pickle
+        print "Saving epistatic interactions to pickle"
+        out_array = np.copy(interactions)
+        if not args.no_nan_replacement:
+            out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
+        pickle.dump(out_array, open(args.interaction_pickle, 'w'))
 
-        #output interaction matrix as pickle for visualization group
-        if args.interaction_pickle is not None:
-            out_array = interactions
-            if not args.no_nan_replacement:
-                out_array[np.where(np.isnan(out_array))] = NAN_REPLACEMENT
-            pickle.dump(out_array, open(args.interaction_pickle, 'w'))
-
-
+print "Done!"

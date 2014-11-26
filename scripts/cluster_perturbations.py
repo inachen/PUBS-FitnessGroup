@@ -15,13 +15,13 @@ import pylab
 NAN_REPLACEMENT = -100 #number to replace np.nan with for downstream analysis, should be absurdly large/small
 
 parser = argparse.ArgumentParser()
-parser.add_argument('array_pickles', type=str, nargs='+', help='pickle files encoding numpy arrays of relative fitness values or interactions')
+parser.add_argument('array_pickles', type=str, nargs='+', help='pickle files encoding numpy arrays of amino acid fitness values or interactions')
 parser.add_argument('--cluster_method', type=str, choices=['all', 'pos'], default='all', help="""mode to use for clustering arrays.
                                          "all" computes pairwise distances between all values of matrices and uses to cluster.
                                          "pos" projects array values of all mutants at a position to a single mean value,
                                          then clusters resulting vectors""")
 parser.add_argument('--pert_names', type=str, nargs='+', default=None, help='list of names of perturbations (used for plotting hierarchy)')
-parser.add_argument('--data_type', type=str, choices=['rel_fitness','interaction'], default='rel_fitness', help='type of data in input arrays, used for color scheme [choices: rel_fitness or interaction]')
+parser.add_argument('--data_type', type=str, choices=['amino_fitness','interaction'], default='amino_fitness', help='type of data in input arrays, used for color scheme [choices: amino_fitness or interaction]')
 parser.add_argument('--out_plot', type=str, default=None, help='filename for output plot')
 args = parser.parse_args()
 
@@ -55,7 +55,7 @@ else: #calculate distance between position means in all arrays
             distance_matrix[i][j] = np.linalg.norm(y-x)
 
 #determine colormap based on input data
-if args.data_type == 'rel_fitness':
+if args.data_type == 'amino_fitness':
     cmap = pylab.cm.YlGnBu_r
     mean_stop = np.nanmin(np.array([np.nanmean(x[0]) for x in data_arrays]))
     vmin = max(-1, mean_stop) #null or lowest

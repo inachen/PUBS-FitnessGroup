@@ -33,7 +33,19 @@ python scripts/cluster_perturbations.py -h
 ```
 
 ```bash
-python scripts/cluster_perturbations.py rel_fitness_dmso_day1.pkl rel_fitness_dmso_day2.pkl rel_fitness_mg132_day1.pkl rel_fitness_mg132_day2.pkl --pert_names DMSO_Day1 DMSO_Day2 MG132_Day1 MG132_Day2 --cluster_method all --data_type rel_fitness --out_plot clustered_perturbations_fitness.png
+python scripts/cluster_perturbations.py amino_fitness_dmso_day1.pkl amino_fitness_dmso_day2.pkl amino_fitness_mg132_day1.pkl amino_fitness_mg132_day2.pkl --pert_names DMSO_Day1 DMSO_Day2 MG132_Day1 MG132_Day2 --cluster_method all --data_type amino_fitness --out_plot clustered_perturbations_fitness.png
+```
+
+##plot_heatmap.py
+
+###Description
+
+Given one or more amino acid fitness matrices or interactions (pickles), plots heatmaps.
+
+###Example Usage
+
+```bash
+python scripts/plot_heatmap.py interaction_mg132day2_dmsoday1.pkl interaction_mg132day2_dmsoday2.pkl --aa_index input_files/aminotonumber.pkl --data_type interaction --plot_titles 'MG132 Day2/DMSO Day 1 Epistatic Interaction' 'MG132 Day2/DMSO Day 2 Epistatic Interaction' -o plot.png
 ```
 
 ##diff.r
